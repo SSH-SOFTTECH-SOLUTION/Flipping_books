@@ -1,6 +1,7 @@
 const { addUserQuery,findUserQuery,userSyncInfoQuery,deviceQuery,userTokenQuery,remoteUserTokenQuery } = require('../dbQuery/user')
 const pool = require('../config/db')
 const jwt = require('jsonwebtoken');
+// const axios = require('axios')
 
 
 const get_device_token = async (req, res) => {
@@ -9,24 +10,38 @@ const get_device_token = async (req, res) => {
     try{
     const { username, password, deviceId } = req.body;
 
-    const credentials = `${username}:${password}`;
+    const credentials = `${'student@hughesmedia.co.uk'}:${'student'}`;
 
     const base64EncodedCredentials = Buffer.from(credentials).toString('base64');
     const authHeader = `Basic ${base64EncodedCredentials}`;
     
     // const axios = require('axios');
     
-    // axios.get('api endpoint', {
+    // await axios.get('https://www.osbornebooks.co.uk/student-zone/get_auth_token', {
     //   headers: {
     //     'Authorization': authHeader
     //   }
     // })
     // .then(async (response) => {
+    //   res.send(response.body)
     // })
     // .catch(error => {
     //   console.error(error);
     // });
 
+
+  //  const result = await fetch(' https://www.osbornebooks.co.uk/get_auth_token', {
+  //     method: 'get',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       'Authorization': authHeader
+  //     }
+  //   })
+  //   // .then(result => result.body)
+  //   // .then(result => result.json())
+  //   res.send(result)
+  //   console.log(result);
+  //   return;
     const auth_token = 'authToken'
         
 
@@ -49,9 +64,9 @@ const get_device_token = async (req, res) => {
     await client.query(remoteUserTokenQuery, [auth_token, time, username]);
     console.log('1');
 
-    //storing userSyncInfo
-    await client.query(userSyncInfoQuery, [id,time, username]);
-    console.log('1');
+    // //storing userSyncInfo
+    // await client.query(userSyncInfoQuery, [id,time, username]);
+    // console.log('1');
     await client.query('COMMIT');
     console.log('Data updated successfully.');
 
