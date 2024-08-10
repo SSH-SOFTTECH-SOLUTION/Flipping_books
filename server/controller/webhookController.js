@@ -83,8 +83,21 @@ const updateUserPublication = async(req, res) => {
     }
 }
 
+const updatePublication = async(req, res) => {
+    const { publication_id } = req.body;
+
+    if(!publication_id) return res.status(400).json({message: 'publication_id required'})
+
+    
+    //fetch puclication
+    //save publication
+
+    res.send({message: 'success'})
+}
+
 module.exports = {
     removeUserAuthToken,
     deleteUser,
-    updateUserPublication
+    updateUserPublication,
+    updatePublication,
 }

@@ -1,13 +1,16 @@
 const express =  require('express')
 const router = express.Router();
-const {removeUserAuthToken,deleteUser,updateUserPublication} = require('../controller/webhookController')
+const {removeUserAuthToken,deleteUser,updateUserPublication,updatePublication} = require('../controller/webhookController')
 
 router.route('/update_user')
-    .post(removeUserAuthToken)
-    .delete(deleteUser)
+    .post(checkServerToken, removeUserAuthToken)
+    .delete(checkServerToken, deleteUser)
 
 router.route('/update_user_publication')
-    .post(updateUserPublication)
+    .post(checkServerToken, updateUserPublication)
     // .delete(deleteUserPublication)
+
+router.route('/update_publication')
+    .post(checkServerToken, updatePublication)
 
 module.exports = router
