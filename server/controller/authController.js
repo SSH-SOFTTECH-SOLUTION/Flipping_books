@@ -15,7 +15,6 @@ const get_device_token = async (req, res) => {
     const base64EncodedCredentials = Buffer.from(credentials).toString('base64');
     const authHeader = `Basic ${base64EncodedCredentials}`;
     
-    // const axios = require('axios');
     
     // await axios.get('https://www.osbornebooks.co.uk/student-zone/get_auth_token', {
     //   headers: {
@@ -119,7 +118,7 @@ const logout = async (req, res) => {
     LIMIT 1
     `, [deviceToken]);
 
-    console.log(userDeviceRes.rows);
+    console.log(userDevice.rows);
     if (userDevice.rows.length === 0) {
        return res.send({message: 'device not found'})
     }
