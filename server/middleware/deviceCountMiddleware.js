@@ -1,8 +1,8 @@
-const { logger } = require("sequelize/lib/utils/logger");
+
 const pool = require("../config/db");
 const { deviceCountQuery } = require("../dbQuery/user");
 const jwt = require('jsonwebtoken');
-const { cloneDeep } = require("sequelize/lib/utils");
+
 
 const deleteEarliestDevice = async (username) => {
   const client = await pool.connect();
