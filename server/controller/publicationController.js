@@ -4,11 +4,12 @@ const pool = require('../config/db')
 const fetchPublications = async (req,res)=>{
     try{
         const response = await axios({
-            methord:'get',
+            method:'get',
             URL:'/publications',  // Endpoint URL (baseURL is already set)
         })
         res.status(200).json(response.data);
     }catch(err){
+        console.log(err);
         res.status(500).json({msg:'failed to fetch data'});
     }
 }
@@ -40,6 +41,20 @@ const fetchSinglePublications =async (req,res)=>{
         console.error('Error fetching publication details:', error);
         res.status(500).json({ error: 'Failed to fetch publication details' });
     }
+}
+
+// delete
+const deletePublication = async(req,res)=>{
+    const { id: publicationId } = req.params;
+    try{
+        
+
+    }catch(err){
+        console.log(err);
+        res.status(500).json({msg:'failed to delete publication'});
+    }
+
+    
 }
 
 
