@@ -1,5 +1,4 @@
 const pool = require('../config/db');
-const auth = require('../middleware/auth');
 
 const removeUserAuthToken = async(req, res) => {
     const client = await pool.connect();
@@ -43,7 +42,6 @@ const deleteUser = async(req, res) => {
     const { username } = req.body
 
     try{
-
         await pool.query(`
             DELETE FROM users
             WHERE username = $1
@@ -73,8 +71,7 @@ const updateUserPublication = async(req, res) => {
         }
 
         const authToken = auth_token.rows[0].value
-        //fetch publication
-        //save publication
+
 
         res.send({message: 'success', authToken: authToken})
     }catch{

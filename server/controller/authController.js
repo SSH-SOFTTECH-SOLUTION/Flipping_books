@@ -1,76 +1,70 @@
-const { addUserQuery,findUserQuery,userSyncInfoQuery,deviceQuery,userTokenQuery,remoteUserTokenQuery } = require('../dbQuery/user')
+const { addUserQuery,findUserQuery,userSyncInfoQuery,clearRemoteTokenQuery,updateRemoteUserTokenQuery,deviceQuery,userTokenQuery,remoteUserTokenQuery } = require('../dbQuery/user')
 const pool = require('../config/db')
 const jwt = require('jsonwebtoken');
-// const axios = require('axios')
-
+const auth = require('../middleware/auth');
+const Buffer = require('buffer').Buffer
 
 const get_device_token = async (req, res) => {
     const client = await pool.connect();
-
-    try{
     const { username, password, deviceId } = req.body;
-
-    const credentials = `${'student@hughesmedia.co.uk'}:${'student'}`;
-
+    const credentials = `${username}:${password}`;
     const base64EncodedCredentials = Buffer.from(credentials).toString('base64');
     const authHeader = `Basic ${base64EncodedCredentials}`;
-    
-    
-    // await axios.get('https://www.osbornebooks.co.uk/student-zone/get_auth_token', {
-    //   headers: {
-    //     'Authorization': authHeader
-    //   }
-    // })
-    // .then(async (response) => {
-    //   res.send(response.body)
-    // })
-    // .catch(error => {
-    //   console.error(error);
-    // });
+    console.log(authHeader);
 
+    try{
+    
+    const result = await fetch('https://www.osbornebooks.co.uk/api/get_auth_token', {
+      method: 'get',
+      headers: {
+        "Authorization": authHeader
+      }
+    })
+    .then((result) => result.json())
+    .catch(err => {
+      console.log(err)
+      return res.send({message: 'osborne err'})
+    })
 
-  //  const result = await fetch(' https://www.osbornebooks.co.uk/get_auth_token', {
-  //     method: 'get',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //       'Authorization': authHeader
-  //     }
-  //   })
-  //   // .then(result => result.body)
-  //   // .then(result => result.json())
-  //   res.send(result)
-  //   console.log(result);
-  //   return;
-    const auth_token = 'authToken'
+    if(result.token === null){
+      return res.send({message: "wrong credentials"})
+    }
+    
+    const auth_token = result.token;
+    const expire = result.expired;
         
-
-    const jwtSecret = 'aofeooieoeowjwoow'
-    const deviceToken =  jwt.sign({username}, jwtSecret, {expiresIn: '7d'})
-
-   const registerUserInfo = async () => {
+    const registerUserInfo = async () => {
+     const jwtSecret = 'aofeooieoeowjwoow'
+     const deviceToken =  jwt.sign({username}, jwtSecret, {expiresIn: '7d'})
+    
     await client.query('BEGIN');
 
-    const time = new Date().toISOString();
-    const id = Math.floor(Math.random()*1000)
+    const date = new Date(expire * 1000);
+    const id = Math.floor(Math.random() * 1000);
 
-        //storing device
-        await client.query(deviceQuery, [deviceId, 12, time, username]);
-        console.log('1');
+// Convert to ISO 8601 string (timestamptz format)
+    const time = date.toISOString();
+    
+        
+    //storing device
+    await client.query(deviceQuery, [deviceId, 12, time, username]);
+    console.log('1');
     //storing deviceToken(device_token)
     await client.query(userTokenQuery, [deviceToken, username, time, time, deviceId]);
     console.log('1');
+    // clearing expiredToken(auth_token)
+    await client.query(remoteUserTokenQuery, [auth_token, time, username])
     //storing remoteUserToken(auth_token)
-    await client.query(remoteUserTokenQuery, [auth_token, time, username]);
+    await client.query(updateRemoteUserTokenQuery, [auth_token, time, username, username]);
     console.log('1');
-
-    // //storing userSyncInfo
+    //storing userSyncInfo
     // await client.query(userSyncInfoQuery, [id,time, username]);
     // console.log('1');
+
     await client.query('COMMIT');
     console.log('Data updated successfully.');
 
-    res.status(200).json({deviceToken: deviceToken})
-   
+     return res.status(200).json({deviceToken: deviceToken})
    }
 
 
@@ -80,15 +74,14 @@ const get_device_token = async (req, res) => {
         registerUserInfo();
     }else{
         const user = await pool.query(addUserQuery, [username])
-        if(user.rows.length === 0) return res.send({message: 'user already exist'})
-        registerUserInfo();
+        if(user.rows.length === 0) return res.send({message: 'something went wrong'})
+          registerUserInfo();
+      }
     }
-}
-
-
-}catch(error){
-    res.status(400).json({message: 'something went wrong'})
-    console.log(error);
+  }
+catch(error){
+  console.log(error);
+    return res.status(400).json({message: 'something went wrong'})
     // throw error
 }finally {
     client.release(); 
@@ -96,6 +89,7 @@ const get_device_token = async (req, res) => {
 }
 
 const logout = async (req, res) => {
+
     const client = await pool.connect()
     console.log('ent logout, connected client');
 
@@ -111,14 +105,14 @@ const logout = async (req, res) => {
     const userDevice = await client.query(`
     SELECT d.id AS device_id, u.value AS user_token_value, r.id AS remote_user_token_id
     FROM usertoken u
-    JOIN device d ON d.id = u.device_name
+    JOIN device d ON d.id = u.device_id
     JOIN RemoteUserToken r ON r.username = u.username
     WHERE u.value = $1
     ORDER BY d.register_time ASC
     LIMIT 1
     `, [deviceToken]);
 
-    console.log(userDevice.rows);
+    // console.log(userDevice.rows);
     if (userDevice.rows.length === 0) {
        return res.send({message: 'device not found'})
     }
@@ -155,12 +149,12 @@ const logout = async (req, res) => {
 
     await client.query('COMMIT');
     console.log('sent res success');
-    res.json({message: `${username} with device ${device_id} logout`})
+    return res.json({message: `${username} with device ${device_id} logout`})
 
     }catch(error){
         console.log(error);
-        res.send({message: 'something went wrong'})
-        console.log('error');
+       return  res.send({message: 'something went wrong'})
+      
     }
     finally{
         console.log('ext logout');

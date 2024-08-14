@@ -1,49 +1,99 @@
-const { query } = require("express");
+const { response } = require("express");
 const axios = require("../config/axiosConfig")
-const pool = require('../config/db')
+const pool = require('../config/db');
+const auth = require("../middleware/auth");
 
-const axiosInstance = require('../config/axiosConfig');
-// const pool = require('../config/dbConfig'); // Assuming you have a dbConfig file for database connection
+const fetchPublications = async (req,res)=>{
+    const client = await pool.connect();
 
-// todo => name changes
-const fetchPublications = async (req, res) => {
-    try {
-        const response = await axiosInstance.get('/publications'); // Use axiosInstance
-        const result = response.data;
+    const auth_token = req.authToken
+    const username = req.username
 
-        // Save data in database
-        const queryText = `
-            INSERT INTO publications (id, title, description, created_at, updated_at, cover_url, publication_url, publication_store_url)
-            VALUES ($1, $2, $3, to_timestamp($4), to_timestamp($5), $6, $7, $8)
-            ON CONFLICT (id) DO UPDATE SET
-                title = EXCLUDED.title,
-                description = EXCLUDED.description,
-                created_at = EXCLUDED.created_at,
-                updated_at = EXCLUDED.updated_at,
-                cover_url = EXCLUDED.cover_url,
-                publication_url = EXCLUDED.publication_url,
-                publication_store_url = EXCLUDED.publication_store_url
-        `;
 
-        const values = result.map(publication => [
-            publication.id,
-            publication.title,
-            publication.description,
-            publication.created_at,
-            publication.updated_at,
-            publication.cover_url,
-            publication.publication_url,
-            publication.publication_store_url
-        ]).flat();
+    //TODO: check MAS db if publication exits
 
-        await pool.query(queryText, values);
 
-        res.status(200).json(result);
-    } catch (err) {
-        console.error('Error fetching publications:', err);
-        res.status(500).json({ msg: 'Failed to fetch data', error: err });
+
+    try{
+        const response = await fetch('https://www.osbornebooks.co.uk/api/publications', {
+            method: 'get',
+            headers: {
+                Authorization: `token ${auth_token}`
+            }
+        })
+        // const response = await axios({
+        //     methord:'get',
+        //     URL:'/publications',  // Endpoint URL (baseURL is already set)
+        // })
+        .then(response => response.json())
+        .catch(err => {
+            console.log(err);
+            return res.send({message: 'something went wrong'})
+        })
+        // res.status(200).json(response.data);
+
+
+        await client.query('BEGIN')
+        if(response.results.length > 0){
+            const publicationValues = response.results.map(pub => [
+                pub.urlId,
+                pub.title,
+                pub.description,
+                pub.cover,
+                pub.urlPath,
+                new Date(pub.created_at * 1000).toISOString(),  
+                new Date(pub.updated_at * 1000).toISOString(), 
+                pub.metadata
+              ]);
+          
+              // Upsert publications: Insert new ones or do nothing if they exist
+              const insertPublicationsQuery = `
+                INSERT INTO publication (url_id, title, description, cover_url, path_url, created_at, updated_at, metadata)
+                VALUES
+                ${publicationValues.map((_, i) => `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`).join(', ')} 
+                ON CONFLICT (url_id) DO UPDATE SET 
+                    title = excluded.title,
+                    description = excluded.description,
+                    cover_url = excluded.cover_url,
+                    path_url = excluded.path_url,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at
+              `;
+          
+              const flatPublicationValues = publicationValues.flat();
+              await client.query(insertPublicationsQuery, flatPublicationValues);
+          console.log('comp')
+              // Prepare data for the publicationreader table
+              const publicationReaderValues = response.results.map(pub => [
+                username, pub.urlId
+              ]);
+          
+
+              // Upsert into publicationreader table
+              const insertPublicationReaderQuery = `
+                INSERT INTO publicationreader (username, publication_id)
+                VALUES
+                ${publicationReaderValues.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(', ')}
+                ON CONFLICT (username, publication_id) DO NOTHING
+              `;
+          
+              const flatPublicationReaderValues = publicationReaderValues.flat();
+              await client.query(insertPublicationReaderQuery, flatPublicationReaderValues);    
+          
+              await client.query('COMMIT');
+              console.log('Publications stored and reader mappings updated successfully.');
+              return res.send(response.results)
+
+        }
+        else{
+            res.send({message: 'no publications found'})
+        }
+    }catch(err){
+        await client.query('ROLLBACK');
+        console.log(err);
+        res.status(500).json({msg:'failed to fetch data'});
     }
-};
+}
 const fetchSinglePublications =async (req,res)=>{
     const { id: publicationId } = req.params;
     

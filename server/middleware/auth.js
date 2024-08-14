@@ -17,10 +17,17 @@ const auth = async (req, res, next) => {
                  if(username){
                     console.log('USERNAME: ', username);
                     const authToken = await pool.query(findAuthTokenQuery, [username])
+                    console.log(authToken.rows);
                     if(authToken.rows.length > 0){
+                        const exp = authToken.rows[0].time_expired
+                        const currentTime = new Date();
                         req.authToken = authToken.rows[0].value
                         req.deviceToken = token
                         req.username = username
+
+                        if(exp < currentTime){
+                            return res.send({message: 'auth_token expired'})
+                        }
                     }
                     else{
                       return res.send({message: 'auth token not found'})
@@ -31,6 +38,7 @@ const auth = async (req, res, next) => {
                 next()
             }
             catch(error){
+                console.log(error);
                 res.send({status: 'failed', message: 'not a valid user'})
             }
         }
