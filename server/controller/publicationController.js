@@ -1,8 +1,13 @@
+const { query } = require("express");
 const { response } = require("express");
 const axios = require("../config/axiosConfig")
 const pool = require('../config/db');
 const auth = require("../middleware/auth");
 
+const axiosInstance = require('../config/axiosConfig');
+// const pool = require('../config/dbConfig'); // Assuming you have a dbConfig file for database connection
+
+// todo => name changes
 const fetchPublications = async (req,res)=>{
     const client = await pool.connect();
 
@@ -93,7 +98,49 @@ const fetchPublications = async (req,res)=>{
         console.log(err);
         res.status(500).json({msg:'failed to fetch data'});
     }
+    finally{
+        client.release();
+    }
 }
+
+// const fetchPublications = async (req, res) => {
+//     try {
+//         const response = await axiosInstance.get('/publications'); // Use axiosInstance
+//         const result = response.data;
+
+//         // Save data in database
+//         const queryText = `
+//             INSERT INTO publications (id, title, description, created_at, updated_at, cover_url, publication_url, publication_store_url)
+//             VALUES ($1, $2, $3, to_timestamp($4), to_timestamp($5), $6, $7, $8)
+//             ON CONFLICT (id) DO UPDATE SET
+//                 title = EXCLUDED.title,
+//                 description = EXCLUDED.description,
+//                 created_at = EXCLUDED.created_at,
+//                 updated_at = EXCLUDED.updated_at,
+//                 cover_url = EXCLUDED.cover_url,
+//                 publication_url = EXCLUDED.publication_url,
+//                 publication_store_url = EXCLUDED.publication_store_url
+//         `;
+
+//         const values = result.map(publication => [
+//             publication.id,
+//             publication.title,
+//             publication.description,
+//             publication.created_at,
+//             publication.updated_at,
+//             publication.cover_url,
+//             publication.publication_url,
+//             publication.publication_store_url
+//         ]).flat();
+
+//         await pool.query(queryText, values);
+
+//         res.status(200).json(result);
+//     } catch (err) {
+//         console.error('Error fetching publications:', err);
+//         res.status(500).json({ msg: 'Failed to fetch data', error: err });
+//     }
+// };
 const fetchSinglePublications =async (req,res)=>{
     const { id: publicationId } = req.params;
     
@@ -124,11 +171,16 @@ const fetchSinglePublications =async (req,res)=>{
     }
 }
 
+// on hault, firt do get resources 
 
 const deletePublication = async(req,res)=>{
     const { id: publicationId } = req.params;
+    const userId = req.username;
+    // const auth =  
     // if id dont exists in server
-    if( !publicationId ) return res.status(400).json({msg:'publication id required'});
+    if( !publicationId ) {
+        return res.status(400).json({msg:'publication id required'});
+    }
     try{
         const checkResult = await pool.query(
             `SELECT 1 FROM publications WHERE id = $1`,
@@ -138,13 +190,25 @@ const deletePublication = async(req,res)=>{
         if (checkResult.rowCount === 0) {
             return res.status(404).json({ msg: 'Publication not found' });
         }
-        const result = await pool.query(
-            `DELETE FROM publications WHERE id = $1`,
-            [publicationId]
+
+        const accessCheck = await pool.query(
+            `SELECT 1 FROM publicationreader WHERE publication_id = $1 AND user_id = $2`,
+            [publication_id, userId]
         );
-        if (result.rowCount === 0) {
-            return res.status(404).json({ msg: 'Publication not found' });
+
+        if (accessCheck.rowCount === 0) {
+            return res.status(404).json({ msg: 'No access record found for this user and publication' });
         }
+
+        const deleteResult = await pool.query(
+            `DELETE FROM publicationreader WHERE publication_id = $1 AND user_id = $2`,
+            [publication_id, userId]
+        );
+
+        if (deleteResult.rowCount === 0) {
+            return res.status(500).json({ msg: 'Failed to delete access record' });
+        }
+
         res.status(200).json({msg:'success'});
         
 
@@ -156,9 +220,46 @@ const deletePublication = async(req,res)=>{
     
 }
 
+// fetch resoures 
+const fetchResources = async (req, res)=>{
+    const {id : publicationId} = req.params;
+    const auth_token = req.authToken
+    const username = req.username
+    // const userId = req.username; // from auth middlewar e
+    // const userId = 'testuser'; // from auth middleware  
+    try{
+        const query = "SELECT * FROM Publication WHERE url_id = $1";
+        const result = await pool.query(query,[publicationId]);
+
+        if(result.length === 0){
+            res.status(404).json({msg:'publication not found'});
+        }
+
+        const publication = result.rows[0];
+
+        // Original path_url
+        let originalPathUrl = publication.path_url;
+
+        // Convert the URL =>  /api/ebook/
+        let modifiedPathUrl = originalPathUrl.replace('/ebook/', '/api/ebook/');
+
+        res.status(200).json({ modifiedPathUrl , auth_token });
+
+    }catch(err){
+        console.log(err);
+        res.status(500).json({msg:'failed to fetch resources'});
+    }
+}
+
 
 module.exports = {
     fetchPublications,
     fetchSinglePublications,
-    deletePublication
+    deletePublication,
+    fetchResources
 }
+
+
+
+
+
