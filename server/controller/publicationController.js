@@ -129,17 +129,76 @@ const fetchPublications = async (req,res)=>{
 }
 const fetchSinglePublications =async (req,res)=>{
     const { id: publicationId } = req.params;
-    
+    const auth_token = req.authToken;
+   const username = req.username;
+
     try {
+      // check if book is present in table
+      const bookCheckResult = await pool.query(
+        `SELECT url_id FROM publication WHERE  url_id = $1`,
+        [publicationId]
+      );
+      if (bookCheckResult.rows.length === 0) {
+        console.log("book not found");
+        console.log("fetching from Osbone server...");
+
+        const osboneResponse= await fetch (`https://osbone-server.com/api/publications/${publicationId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `token ${auth_token}`
+            },
+          })
+          
+          if (!osboneResponse.ok) {
+            console.error('Error fetching from Osbone server:', osboneResponse.statusText);
+            return res.status(404).json({ error: "Book not found on Osbone server" });
+          }
+
+          const osboneData = await osboneResponse.json();
+          // const osbonePublication = osboneData.results[0];
+          const insertResult = await pool.query(
+            `INSERT INTO publication(url_id ,title , descrption , cover_url , path_url , created_at , updated_at , metadata)
+            VALUES ($1, $2, $3, $4, $5, to_timestamp($6), to_timestamp($7), $8)
+            RETURNING url_id, title, description,
+              cover_url AS "coverUrl",
+              path_url AS "pathUrl",
+              EXTRACT(EPOCH FROM created_at) AS created_at, 
+              EXTRACT(EPOCH FROM updated_at) AS updated_at, 
+              metadata`,
+            [
+              osboneData.url_id,
+               osboneData.title,
+               osboneData.description,
+               osboneData.coverUrl,
+               osboneData.urlPath,
+               osboneData.created_at,
+               osboneData.updated_at,
+               osboneData.metadata
+            ]
+          );
+
+          const publication = insertResult.rows[0];
+
+          // Insert data into publicationreader table
+          await pool.query(
+            `INSERT INTO publicationreader (username, publication_id, updated_at)
+             VALUES ($1, $2, to_timestamp($3))`,
+             [ username , publication.url_id , Date.now() / 1000]
+          );
+
+
+        return res.status(200).json({"mes" : "success"});
+      }
         // Query the database for publication details by ID
-        const result = await pool.query(
-            `SELECT id, title, description, 
+      const result = await pool.query(
+            `SELECT url_id, title, description,
                     EXTRACT(EPOCH FROM created_at) AS created_at, 
                     EXTRACT(EPOCH FROM updated_at) AS updated_at, 
                     cover_url AS "coverUrl", 
-                    publication_url AS "publicationUrl", 
-                    publication_store_url AS "publicationStoreUrl"
-             FROM publications 
+                    path_url AS "pathUrl", 
+                    metadata,
+             FROM publication
              WHERE id = $1`,
       [publicationId]
     );
@@ -167,6 +226,7 @@ const deletePublication = async(req,res)=>{
     if( !publicationId ) {
         return res.status(400).json({msg:'publication id required'});
     }
+
     try{
         const checkResult = await pool.query(
             `SELECT 1 FROM publications WHERE id = $1`,
@@ -214,7 +274,7 @@ const fetchResources = async (req, res)=>{
     // const userId = req.username; // from auth middlewar e
     // const userId = 'testuser'; // from auth middleware  
     try{
-        const query = "SELECT * FROM Publication WHERE url_id = $1";
+        const query = "SELECT * FROM Publication WHERE id = $1";
         const result = await pool.query(query,[publicationId]);
 
         if(result.length === 0){
