@@ -127,6 +127,7 @@ const fetchPublications = async (req,res)=>{
         client.release();
     }
 }
+
 const fetchSinglePublications =async (req,res)=>{
     const { id: publicationId } = req.params;
     
@@ -169,7 +170,7 @@ const deletePublication = async(req,res)=>{
     }
     try{
         const checkResult = await pool.query(
-            `SELECT 1 FROM publications WHERE id = $1`,
+            `SELECT 1 FROM publication WHERE url_id = $1`,
             [publicationId]
         );
 
@@ -178,8 +179,8 @@ const deletePublication = async(req,res)=>{
         }
 
         const accessCheck = await pool.query(
-            `SELECT 1 FROM publicationreader WHERE publication_id = $1 AND user_id = $2`,
-            [publication_id, userId]
+            `SELECT 1 FROM publicationreader WHERE publication_id = $1 AND username = $2`,
+            [publicationId, userId]
         );
 
         if (accessCheck.rowCount === 0) {
@@ -187,8 +188,8 @@ const deletePublication = async(req,res)=>{
         }
 
         const deleteResult = await pool.query(
-            `DELETE FROM publicationreader WHERE publication_id = $1 AND user_id = $2`,
-            [publication_id, userId]
+            `DELETE FROM publicationreader WHERE publication_id = $1 AND username = $2`,
+            [publicationId, userId]
         );
 
         if (deleteResult.rowCount === 0) {
