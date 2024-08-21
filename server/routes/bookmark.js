@@ -2,7 +2,7 @@
 const express = require('express');
 const pool = require('../config/db');
 const router = express.Router();
-
+console.log("hi ");
 // GET bookmark
 router.get('/', async (req, res) => {
     const { user_id } = req.body;

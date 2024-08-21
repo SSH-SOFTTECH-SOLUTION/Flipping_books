@@ -4,7 +4,8 @@ const rateLimite = require('express-rate-limit');
 const authRouter = require('./routes/authRoutes');
 const webhookRouter = require('./routes/webhookRoutes')
 const publicationRouter = require('./routes/publicationRoutes')
-
+const highlightsRoute = require("./routes/highlights")
+const bookmarkRoutes = require("./routes/bookmark")
 const app = express();
 
 const limiter = rateLimite({
@@ -20,5 +21,6 @@ app.get('/testLimit', limiter, (req, res) => res.send({message: 'success'}));
 app.use('/api/auth', authRouter)
 app.use('/api/webhook', webhookRouter)
 app.use('/api/publications', publicationRouter)
-
+app.use("/api/highlights", highlightsRoute)
+app.use("/api/bookmarks", bookmarkRoutes)
 app.listen(3000, ()=> console.log('server started'))
